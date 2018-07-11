@@ -1,4 +1,4 @@
-package mixnetrouting
+package cyclic
 
 import (
 	"crypto/rand"

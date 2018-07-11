@@ -1,10 +1,10 @@
-package mixnetrouting
+package cyclic
 
 import (
 	"crypto/rand"
 	"encoding/base64"
 	"github.com/dist-ribut-us/crypto"
-	"github.com/dist-ribut-us/docs/mixnetrouting/cipher"
+	"github.com/dist-ribut-us/docs/mixnetrouting/cyclic/cipher"
 )
 
 const (
@@ -147,6 +147,8 @@ func (n *PrivNode) Route(r *RoutePackage) error {
 	var err error
 	if len(r.Map) > BoxIDLen {
 		r.Next, err = shared.NonceOpen(m[:BoxIDLen], nonce)
+		// A decryption failure may not be an actual error, it may mean that we're
+		// done routing.
 		if err != nil {
 			r.Next = nil
 			r.Map = nil

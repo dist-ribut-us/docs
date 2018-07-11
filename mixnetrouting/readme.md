@@ -45,7 +45,7 @@ Because all nodes are constantly routing, it becomes very difficult to identify
 where a message starts and where it ends - even to an attacker that can inspect
 all network traffic. If a message enters a node and shortly after a message of
 the same size leaves, did that node route a message or did it receive a message
-and send a response. If a node receives 10 messages over the course of a few
+and send a response? If a node receives 10 messages over the course of a few
 seconds and then sends out a burst of 10 messages, it becomes even more
 difficult to analyze. And a node could do that repeatedly over the course of
 minutes, further blurring the lines of which messages were sent in which bursts.
@@ -55,8 +55,9 @@ add an urgency level to each stage of the route. When the urgency is low, nodes
 can use the message as chaff, holding on to a few low urgency messages until a
 high urgency message arrives, then releasing all the messages in a a randomly
 ordered burst. Nodes can also strategically use routine status requests as
-chaff. A node that needs to send a heartbeat message to a DHT neighbor could
-pad to the same length as a message it is routing and send both out together.
+chaff. A node that needs to send a heartbeat message to a DHT neighbor could pad
+to the same length as a message it is routing and send both out in quick
+succession.
 
 #### Stateless
 
@@ -119,11 +120,11 @@ route like
 
     A → N1 → N2 → N3 → N4 → B
 
-Where A has chosen N1 and N2 and B has chosen N3 and N4; A not only should A not
+Where A has chosen N1 and N2 and B has chosen N3 and N4; not only should A not
 know the identity of N4, but A can never see any uniquely identifiable
 message data that N4 sees. And the same goes for B relative to N1. It is
 necessary for A to know the identity of N3 and it is possible for B to derive
-the identity of N2.
+the identity of N2, that is unavoidable.
 
 ### A Classic Approach
 
@@ -163,14 +164,14 @@ created (the one containing the route ID), which is appended to the end of the
 route and he prepends the public ephemeral exchange key. So the message looks
 like this:
 
-  EX | Nonce | Enc(ES, Next|Add ) | EncUnMAC( R )
-  EX   : ephemeral exchange key
-  Nonce: Makes process non-deterministic. Same nonce is used for all 3
-         cryptographic operations.
-  ES   : shared key computed from ephemeral exchange key
-  Next : the next node, in this case Bob
-  Add  : the direction, in this case add a layer of encryption
-  R    : the rest of the route 
+    EX | Nonce | Enc(ES, Next|Add ) | EncUnMAC( R )
+    EX   : ephemeral exchange key
+    Nonce: Makes process non-deterministic. Same nonce is used for all 3
+           cryptographic operations.
+    ES   : shared key computed from ephemeral exchange key
+    Next : the next node, in this case Bob
+    Add  : the direction, in this case add a layer of encryption
+    R    : the rest of the route 
 
 Bob then chooses N3 and performs the same operation. Choose an ephemeral
 keypair, compute the shared key, use that to encrypt the next node (N4) and
@@ -243,9 +244,9 @@ cipher text is never repeated during this process. When all the keys have been
 applied, the original message is recovered.
 
 Such a cipher is possible. The next few sections will describe the cipher and
-the code in this repo demonstrates it. It is presented more as a proof of
-concept than a real proposal in hopes that others can build upon it to propose
-changes or alternatives that reduce the overhead and increase the speed.
+the code in this repo demonstrates it. It is presented as a proof of concept,
+not a real proposal in hopes that others can build upon it to propose changes or
+alternatives that reduce the overhead and increase the speed.
 
 #### Math Foundation
 
@@ -269,7 +270,7 @@ then
 
 which means
 
-		(M * r^k1 * r^k2 * ... * r^kn) = M
+    (M * r^k1 * r^k2 * ... * r^kn) = M
 
 #### Choosing a Prime
 
@@ -427,8 +428,7 @@ require 8KB-16KB of overhead, which is unacceptable.
 
 But it shows promise. There are almost certainly better ways to accomplish the
 same thing. However, my background in mathematics and cryptography is somewhat
-limited and this is these are the only two workable solutions I have shown so
-far.
+limited and these are the only two workable solutions I have shown so far.
 
 It does deliver the primary goal - every node performs the same cipher. It
 increases the statelessness because the receiver does not need to remember any
@@ -438,10 +438,8 @@ keys.
 
 It may be the case that the shared key is not enough secrecy and more secret
 bits will need to be included in the encrypted portion of the message, but that
-is easy to implement, but increases the overhead.
-
-It would also be possible to include the bits from the exchange key to further
-salt the key.
+is easy to implement, but increases the overhead.It would also be possible to
+include the bits from the exchange key to further salt the key.
 
 The necessary strength is difficult to compute. Unlike a normal encryption where
 the objective to protect the message, the goal is to obfuscate the path taken.
@@ -473,7 +471,11 @@ the route to
 
     A → N1 → N2 → N5 → N6 → N3 → N4 → B
 
-This indirection can be used to mask traffic patterns.
+This indirection can be used to mask traffic patterns. It can also be used to
+route things following the natural connections of a distributed hash table
+instead of needing to make one-off connections for routing. This is possible
+with the previous method, but the message will remain static during indirection
+which doesn't provide the additional masking.
 
 ### Additional Considerations
 
@@ -572,7 +574,7 @@ Nodes have little incentive to freeload. Because all network traffic is wrapped
 in mixnet envelopes, a node has to perform the first half of the routing
 protocol to receive any messages.
 
-A node could potentially fail to route at this point, but it would be easy to
+A node could potentially decline to route at this point, but it would be easy to
 identify these nodes. Just send messages through the suspect node and see if
 they are delivered. Once nodes are detected, they can be black listed and
 traffic to and from them will be blocked.
