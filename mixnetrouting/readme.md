@@ -6,6 +6,9 @@ This paper makes a case for serverless and stateless mixnet routing. It explores
 techniques and advantages of this approach and will describe two methods, one
 using an original cipher.
 
+Demo code is provided for both approaches. The demos are presented as unit
+tests.
+
 ### Argument
 
 Most approaches to mixnets use either servers or dedicated routing nodes, which
@@ -127,6 +130,9 @@ necessary for A to know the identity of N3 and it is possible for B to derive
 the identity of N2, that is unavoidable.
 
 ### A Classic Approach
+
+The demo code for this appraoch can be seen at
+http://github.com/dist-ribut-us/docs/mixnetrouting/onion
 
 It is possible to achieve this with something very similar to the MORE model.
 The slight tweak is that along with the key, we include a direction; an
@@ -334,6 +340,12 @@ To compensate for this, the receiver of the message needs to perform
     M = C * r^(p-1-acc) % p
 
 #### Application
+
+The demo code for this can be seen at
+http://github.com/dist-ribut-us/docs/mixnetrouting/cyclic and
+http://github.com/dist-ribut-us/docs/mixnetrouting/cyclic/cipher. The first
+contains all the logic necessary for routing and the second contains just the
+logic of the cipher.
 
 Working through the same example as above
 

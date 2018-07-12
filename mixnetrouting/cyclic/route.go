@@ -16,7 +16,7 @@ const (
 
 var encode = base64.URLEncoding.EncodeToString
 
-// PrivNode is not share
+// PrivNode is not shared
 type PrivNode struct {
 	ID  []byte
 	Key *crypto.XchgPair
