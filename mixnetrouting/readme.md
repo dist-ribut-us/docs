@@ -132,7 +132,7 @@ the identity of N2, that is unavoidable.
 ### A Classic Approach
 
 The demo code for this appraoch can be seen at
-http://github.com/dist-ribut-us/docs/mixnetrouting/onion
+https://github.com/dist-ribut-us/docs/tree/master/mixnetrouting/onion
 
 It is possible to achieve this with something very similar to the MORE model.
 The slight tweak is that along with the key, we include a direction; an
@@ -342,10 +342,10 @@ To compensate for this, the receiver of the message needs to perform
 #### Application
 
 The demo code for this can be seen at
-http://github.com/dist-ribut-us/docs/mixnetrouting/cyclic and
-http://github.com/dist-ribut-us/docs/mixnetrouting/cyclic/cipher. The first
-contains all the logic necessary for routing and the second contains just the
-logic of the cipher.
+https://github.com/dist-ribut-us/docs/tree/master/mixnetrouting/cyclic and
+https://github.com/dist-ribut-us/docs/tree/master/mixnetrouting/cyclic/cipher.
+The first contains all the logic necessary for routing and the second contains
+just the logic of the cipher.
 
 Working through the same example as above
 
