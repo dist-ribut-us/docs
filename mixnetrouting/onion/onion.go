@@ -30,6 +30,20 @@ type PrivNode struct {
 	Count map[crypto.Nonce]byte
 }
 
+// NewPrivNode creates a PrivateNode with the ID set to the head of the digest
+// of the public exchange key.
+func NewPrivNode() *PrivNode {
+	id := make([]byte, IDLen)
+	key := crypto.GenerateXchgPair()
+	dig := crypto.DigestFromSlice(key.Pub().Slice())
+	copy(id, dig.Slice())
+	return &PrivNode{
+		ID:    id,
+		Key:   key,
+		Count: make(map[crypto.Nonce]byte),
+	}
+}
+
 var zeroID = encode(make([]byte, IDLen))
 
 // ShouldContinue returns false if the next address is Zero or in the cache
@@ -57,23 +71,15 @@ func (n *PrivNode) Open(routePackage *RoutePackage) ([]byte, error) {
 	return n.Key.AnonOpen(routePackage.Data)
 }
 
-// NewPrivNode creates a PrivateNode with the ID set to the head of the digest
-// of the public exchange key.
-func NewPrivNode() *PrivNode {
-	id := make([]byte, IDLen)
-	key := crypto.GenerateXchgPair()
-	dig := crypto.DigestFromSlice(key.Pub().Slice())
-	copy(id, dig.Slice())
-	return &PrivNode{
-		ID:    id,
-		Key:   key,
-		Count: make(map[crypto.Nonce]byte),
-	}
-}
-
 // String is used to generate map keys
 func (n *PrivNode) String() string {
 	return encode(n.ID)
+}
+
+// PubNode represents the data that a Private node would publish to the network
+type PubNode struct {
+	ID  []byte
+	Key *crypto.XchgPub
 }
 
 // Pub returns the PubNode of a Private node
@@ -82,12 +88,6 @@ func (n *PrivNode) Pub() *PubNode {
 		ID:  n.ID,
 		Key: n.Key.Pub(),
 	}
-}
-
-// PubNode represents the data that a Private node would publish to the network
-type PubNode struct {
-	ID  []byte
-	Key *crypto.XchgPub
 }
 
 // String is used to generate map keys
@@ -144,28 +144,6 @@ func (n *PrivNode) NewReceiveRoute() *RouteBuilder {
 	}
 	rb.Push(n.Pub())
 	return rb
-}
-
-// Send finishes the route building process and uses the route to construct a
-// RoutePackage
-func (rb *RouteBuilder) Send(msg []byte) *RoutePackage {
-	if rb.BaseKey != nil {
-		msg = rb.BaseKey.AnonSeal(msg)
-	}
-	for _, kn := range rb.KNs {
-		msg = kn.Key.UnmacdSeal(msg, kn.Nonce)
-	}
-
-	cp := make([]byte, len(rb.Data))
-	copy(cp, rb.Data)
-
-	return &RoutePackage{
-		RouteMsg: &RouteMsg{
-			Map:  cp,
-			Data: msg,
-		},
-		Next: rb.Next,
-	}
 }
 
 // Receive take recieve RouteBuilder and turns it into a send Route builder,
@@ -229,6 +207,28 @@ type RoutePackage struct {
 	*RouteMsg
 	Next []byte
 	KN   KN
+}
+
+// Send finishes the route building process and uses the route to construct a
+// RoutePackage
+func (rb *RouteBuilder) Send(msg []byte) *RoutePackage {
+	if rb.BaseKey != nil {
+		msg = rb.BaseKey.AnonSeal(msg)
+	}
+	for _, kn := range rb.KNs {
+		msg = kn.Key.UnmacdSeal(msg, kn.Nonce)
+	}
+
+	cp := make([]byte, len(rb.Data))
+	copy(cp, rb.Data)
+
+	return &RoutePackage{
+		RouteMsg: &RouteMsg{
+			Map:  cp,
+			Data: msg,
+		},
+		Next: rb.Next,
+	}
 }
 
 type ErrReplay struct{}
