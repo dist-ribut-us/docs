@@ -131,7 +131,7 @@ the identity of N2, that is unavoidable.
 
 ### A Classic Approach
 
-The demo code for this appraoch can be seen at
+The demo code for this approach can be seen at
 https://github.com/dist-ribut-us/docs/tree/master/mixnetrouting/onion
 
 It is possible to achieve this with something very similar to the MORE model.
@@ -224,6 +224,27 @@ the message.
 
 In this example Alice and Bob each chose 2 nodes, in practice they should choose
 at least 3 and have the option to choose more.
+
+#### Replay
+
+This approach would be subject to replay attacks. For Sending routes, this
+problem is easily fixed by conceding a small amount of statefulness. Each node
+keeps a record of the routes it's seen, keyed by the hash. If it sees a sending
+hash it's already seen, it fails the routing. This works so long as nodes never
+re-use a send route, which they never should. While this sacrifices pure
+statelessness it still meets our original goals. When a node drops off the
+network or refreshes their overlay ID, the old route is no longer traversable so
+the replay attack becomes infeasible.
+
+Receive routes are more difficult because they are intended to be reused. The
+solution exploits that UnmacdSeal and UnmacdOpen are symmetric. When adding a
+layer of encryption during a Receive routing operation, instead of using the
+nonce included in the Map Packet to add a layer of encryption, a random nonce is
+generated. When the Map Packets are padded after removing the lead packet, this
+nonce is appended to the end. The UnmacdOpen operation is then actually
+performing an encryption on the nonce. When the packet reaches the end node,
+they will perform rounds of UnmacdSeal to recover the nonces. This is shown in
+the demo code.
 
 #### Note on MACs
 
@@ -522,11 +543,16 @@ problem.
 
 #### Replay timing attacks
 
-As noted, we can prevent the replay attack from being a simple proof, but it can
-still be used as a timing attack. There is a natural balance. In order to unmask
-the sender and receiver, nodes must be at opposite ends of the route, which
-introduces a lot of noise. But, an attacker could re-use a route many times to
-overcome this noise.
+In both cases mitigations against replay attacks have been proposed. However
+both of these solutions are imperfect. Both will still leave a portion of the
+route exposed. A full solution (not presented here) would be to have the padding
+generated deterministically so that the Route Map will always be the same. Along
+with the other data cached, a hash of the route map can be cached. If an
+attacker tries to exploit the replay by changing part of the route map the
+honest node will detect the attack not not route the message.
+
+It is necessary to allow the receiving routes to be reused. This opens the
+protocol up to timing attacks.
 
 There are several ways to mitigate this, but they all break pure statelessness,
 but to a degree that should be acceptable in the broader scope of the system.
@@ -536,11 +562,11 @@ the key until the expiration time. If it sees the same key again, it will not
 route the message. The cache should remain small because the expiration times
 would only be allowed to be a few seconds or minutes in the future.
 
-While this does break statelessness to a degree, remember that the original
-argument for statelessness was that node persistence could not be relied upon.
-This approach still fulfills that objective. An attacker cannot execute a replay
-attack on a node that has already left the network. And upon it's return, a
-node will assume a new overlay identity.
+While this does break statelessness to a degree, the original argument for
+statelessness was that node persistence could not be relied upon. This approach
+still fulfills that objective. An attacker cannot execute a replay attack on a
+node that has already left the network. And upon it's return, a node will assume
+a new overlay identity.
 
 This will not provide perfect protection against timing attacks, but the only
 techniques that do require a constant stream of data, which comes at a high
@@ -550,10 +576,9 @@ chaff.
 
 #### Scaled Privacy
 
-Let's not lose sight of the fact that mixnet routing exists only to protect
-meta-data. A pure P2P system could be devised that does end-to-end encryption
-with perfect security of the content of the messages, but it would leak who was
-talking to who.
+Mixnet routing exists only to protect meta-data. A pure P2P system with
+end-to-end encryption provides perfect security of the content of the messages,
+but it would leak who was talking to who, how often and how much data is sent.
 
 For a lot of users and a lot of network traffic, hiding this meta-data is not a
 high priority and will not be worth the trade in performance. But that is fine
@@ -587,7 +612,7 @@ in mixnet envelopes, a node has to perform the first half of the routing
 protocol to receive any messages.
 
 A node could potentially decline to route at this point, but it would be easy to
-identify these nodes. Just send messages through the suspect node and see if
+identify these nodes by sending messages through the suspect node and see if
 they are delivered. Once nodes are detected, they can be black listed and
 traffic to and from them will be blocked.
 
