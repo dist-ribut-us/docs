@@ -41,7 +41,7 @@ func TestSend(t *testing.T) {
 	for i := 0; i < hops; i++ {
 		hopID := ids[mr.Intn(totalNodes)]
 		hopIDs[i] = hopID
-		rb.Push(dht[hopID].Pub())
+		assert.NoError(t, rb.Push(dht[hopID].Pub()))
 	}
 	// Random message
 	msg := make([]byte, msgLen)
@@ -81,7 +81,7 @@ func TestReceive(t *testing.T) {
 	for i := 0; i < receiveHops; i++ {
 		hopID := ids[mr.Intn(totalNodes)]
 		hopIDs[i+1] = hopID
-		rb.Push(dht[hopID].Pub())
+		assert.NoError(t, rb.Push(dht[hopID].Pub()))
 	}
 
 	routeID, ks := rb.Receive()
@@ -89,7 +89,7 @@ func TestReceive(t *testing.T) {
 	for i := 0; i < sendHops; i++ {
 		hopID := ids[mr.Intn(totalNodes)]
 		hopIDs[i+receiveHops+1] = hopID
-		rb.Push(dht[hopID].Pub())
+		assert.NoError(t, rb.Push(dht[hopID].Pub()))
 	}
 	// Random message
 	msg := make([]byte, msgLen)
@@ -125,12 +125,14 @@ func TestAliceToBob(t *testing.T) {
 	dht, ids := setupDHT(totalNodes)
 	bob := ids[mr.Intn(totalNodes)]
 
-	bobsRoute := setupBobsRoute(bob, dht, ids, bobsHops)
+	bobsRoute, err := setupBobsRoute(bob, dht, ids, bobsHops)
+	assert.NoError(t, err)
 
 	// At this point, Alice knows the route leads to Bob, but she can't read the
 	// data in the route. Alice adds her own nodes to the route to protect her
 	// anonymity
-	alicesRoute := setupAlicesRoute(bobsRoute, dht, ids, alicesHops)
+	alicesRoute, err := setupAlicesRoute(bobsRoute, dht, ids, alicesHops)
+	assert.NoError(t, err)
 
 	msg := []byte("Hi Bob, how was your vacation?")
 	rp := alicesRoute.Send(msg)
@@ -152,27 +154,33 @@ func TestAliceToBob(t *testing.T) {
 
 }
 
-func setupBobsRoute(bob string, dht map[string]*PrivNode, ids []string, hops int) *RouteBuilder {
+func setupBobsRoute(bob string, dht map[string]*PrivNode, ids []string, hops int) (*RouteBuilder, error) {
 	totalNodes := len(ids)
 	bobNode := dht[bob]
 	rb := bobNode.NewReceiveRoute()
 	for i := 0; i < hops; i++ {
 		hopID := ids[mr.Intn(totalNodes)]
-		rb.Push(dht[hopID].Pub())
+		err := rb.Push(dht[hopID].Pub())
+		if err != nil {
+			return nil, err
+		}
 	}
 	id, keyset := rb.Receive()
 	bobNode.Cache = make(map[string]KeySet)
 	bobNode.Cache[id] = keyset
-	return rb
+	return rb, nil
 }
 
-func setupAlicesRoute(rb *RouteBuilder, dht map[string]*PrivNode, ids []string, hops int) *RouteBuilder {
+func setupAlicesRoute(rb *RouteBuilder, dht map[string]*PrivNode, ids []string, hops int) (*RouteBuilder, error) {
 	totalNodes := len(ids)
 	for i := 0; i < hops; i++ {
 		hopID := ids[mr.Intn(totalNodes)]
-		rb.Push(dht[hopID].Pub())
+		err := rb.Push(dht[hopID].Pub())
+		if err != nil {
+			return nil, err
+		}
 	}
-	return rb
+	return rb, nil
 }
 
 func TestReplay(t *testing.T) {
@@ -186,7 +194,7 @@ func TestReplay(t *testing.T) {
 	// Track the IDs just for testing
 	for i := 0; i < hops; i++ {
 		hopID := ids[mr.Intn(totalNodes)]
-		rb.Push(dht[hopID].Pub())
+		assert.NoError(t, rb.Push(dht[hopID].Pub()))
 	}
 
 	// Random message

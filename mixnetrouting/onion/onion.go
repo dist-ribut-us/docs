@@ -17,7 +17,8 @@ const (
 	// AddEncryption indicates that during routing a layer of encryption shoud be
 	// added
 	AddEncryption byte = 1
-	PacketLength       = crypto.KeyLength + crypto.NonceLength + BoxIDLen
+	// PacketLength is the total length of a Map package
+	PacketLength = crypto.KeyLength + crypto.NonceLength + BoxIDLen
 )
 
 var encode = base64.URLEncoding.EncodeToString
@@ -101,18 +102,36 @@ type KN struct {
 	Nonce *crypto.Nonce
 }
 
-func (kn KN) SealPackets(packets []byte) {
+// ErrBadPackets is returned when attempting to peform a Packets operation on
+// a slice that is not a multiple of PacketsLength
+type ErrBadPackets struct{}
+
+func (ErrBadPackets) Error() string {
+	return "Length of packets must be a multiple of PacketLength"
+}
+
+// SealPackets performs an UnmacdSeal on each Map Package
+func (kn KN) SealPackets(packets []byte) error {
+	if len(packets)%PacketLength != 0 {
+		return ErrBadPackets{}
+	}
 	for i := 0; i < len(packets); i += PacketLength {
 		packet := kn.Key.UnmacdSeal(packets[i:i+PacketLength], kn.Nonce)
 		copy(packets[i:i+PacketLength], packet)
 	}
+	return nil
 }
 
-func (kn KN) OpenPackets(packets []byte) {
+// OpenPackets performs an UnmacdOpen on each Map Package
+func (kn KN) OpenPackets(packets []byte) error {
+	if len(packets)%PacketLength != 0 {
+		return ErrBadPackets{}
+	}
 	for i := 0; i < len(packets); i += PacketLength {
 		packet := kn.Key.UnmacdOpen(packets[i:i+PacketLength], kn.Nonce)
 		copy(packets[i:i+PacketLength], packet)
 	}
+	return nil
 }
 
 // KeySet is used to store receiving route keys
@@ -124,7 +143,10 @@ type KeySet struct {
 // Open removes onion layers from the receive route and applies the base key.
 func (rp *RoutePackage) Open(ks KeySet) ([]byte, error) {
 	for _, kn := range ks.KNs {
-		kn.SealPackets(rp.Map)
+		err := kn.SealPackets(rp.Map)
+		if err != nil {
+			return nil, err
+		}
 		ln := len(rp.Map) - PacketLength
 		nonce := crypto.NonceFromSlice(rp.Map[ln:])
 		rp.Map = rp.Map[:ln]
@@ -182,7 +204,7 @@ func (rb *RouteBuilder) Receive() (string, KeySet) {
 }
 
 // Push a Node onto the route.
-func (rb *RouteBuilder) Push(n *PubNode) {
+func (rb *RouteBuilder) Push(n *PubNode) error {
 	// EX | Nonce | Enc(ES, Next|Dir ) | EncUnMAC( R )
 	// EX   : ephemeral exchange key
 	// Nonce: Makes process non-deterministic. Same nonce is used for all 3
@@ -207,11 +229,15 @@ func (rb *RouteBuilder) Push(n *PubNode) {
 	}
 	copy(nd[1:], rb.Next)
 
-	kn.SealPackets(rb.Data)
+	err := kn.SealPackets(rb.Data)
+	if err != nil {
+		return err
+	}
 	rb.Data = append(kn.Key.Seal(nd, kn.Nonce), rb.Data...)
 	rb.Data = append(kp.Pub().Slice(), rb.Data...)
 	rb.Next = n.ID
 	rb.KNs = append(rb.KNs, kn)
+	return nil
 }
 
 // RouteMsg is what is passed between nodes
@@ -249,6 +275,7 @@ func (rb *RouteBuilder) Send(msg []byte) *RoutePackage {
 	}
 }
 
+// ErrReplay is returned if a send route is reused
 type ErrReplay struct{}
 
 func (ErrReplay) Error() string {
@@ -284,16 +311,16 @@ func (n *PrivNode) Route(r *RoutePackage) error {
 		ln := len(m)
 		copy(r.Map[ln:], mgsNonce.Slice())
 		rand.Read(r.Map[ln+crypto.NonceLength:])
-		kn.OpenPackets(r.Map)
+		err = kn.OpenPackets(r.Map)
 	} else {
 		if c, ok := n.Count[*kn.Nonce]; ok && c == 0 {
 			return ErrReplay{}
 		}
 		r.Data = kn.Key.UnmacdOpen(r.Data, kn.Nonce)
 		n.Count[*kn.Nonce] = 0
-		kn.OpenPackets(m)
+		err = kn.OpenPackets(m)
 		copy(r.Map, m)
 		rand.Read(r.Map[len(m):])
 	}
-	return nil
+	return err
 }
