@@ -253,37 +253,36 @@ func (ErrReplay) Error() string {
 // Route a package. The package will be mutated so that it contains the correct
 // Next ID and the RouteMsg to be sent.
 func (n *PrivNode) Route(r *RoutePackage) error {
+	var kn KN
 	m := r.Map
-	shared := n.Key.Shared(crypto.XchgPubFromSlice(m[:crypto.KeyLength]))
+	kn.Key = n.Key.Shared(crypto.XchgPubFromSlice(m[:crypto.KeyLength]))
 
 	m = m[crypto.KeyLength:]
-	nonce := crypto.ExtractNonce(m)
-	if nonce == nil {
+	kn.Nonce = crypto.ExtractNonce(m)
+	if kn.Nonce == nil {
 		return crypto.ErrDecryptionFailed
 	}
 
 	m = m[crypto.NonceLength:]
-	nd, err := shared.NonceOpen(m[:BoxIDLen], nonce)
+	nd, err := kn.Key.NonceOpen(m[:BoxIDLen], kn.Nonce)
 	if err != nil || len(nd) == 0 {
 		return crypto.ErrDecryptionFailed
 	}
-	r.Next = nd[1:]
-	if nd[0] == AddEncryption {
-		r.Data = shared.UnmacdSeal(r.Data, nonce)
-	} else {
-		if c, ok := n.Count[*nonce]; ok && c == 0 {
-			return ErrReplay{}
-		}
-		r.Data = shared.UnmacdOpen(r.Data, nonce)
-		n.Count[*nonce] = 0
-	}
 
 	m = m[BoxIDLen:]
-	KN{
-		Key:   shared,
-		Nonce: nonce,
-	}.OpenPackets(m)
+	kn.OpenPackets(m)
 	copy(r.Map, m)
 	rand.Read(r.Map[len(m):])
+
+	r.Next = nd[1:]
+	if nd[0] == AddEncryption {
+		r.Data = kn.Key.UnmacdSeal(r.Data, kn.Nonce)
+	} else {
+		if c, ok := n.Count[*kn.Nonce]; ok && c == 0 {
+			return ErrReplay{}
+		}
+		r.Data = kn.Key.UnmacdOpen(r.Data, kn.Nonce)
+		n.Count[*kn.Nonce] = 0
+	}
 	return nil
 }
