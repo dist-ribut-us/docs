@@ -111,7 +111,7 @@ func TestReceive(t *testing.T) {
 	}
 
 	assert.Equal(t, routeID, encode(rp.Next))
-	out, err := ks.Open(rp.Data)
+	out, err := rp.Open(ks)
 	assert.NoError(t, err)
 
 	assert.Equal(t, msg, out)

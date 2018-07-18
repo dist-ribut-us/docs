@@ -65,7 +65,7 @@ func (n *PrivNode) Open(routePackage *RoutePackage) ([]byte, error) {
 	if n.Cache != nil {
 		ks, ok := n.Cache[encode(routePackage.Next)]
 		if ok {
-			return ks.Open(routePackage.Data)
+			return routePackage.Open(ks)
 		}
 	}
 	return n.Key.AnonOpen(routePackage.Data)
@@ -122,11 +122,16 @@ type KeySet struct {
 }
 
 // Open removes onion layers from the receive route and applies the base key.
-func (ks KeySet) Open(cipher []byte) ([]byte, error) {
+func (rp *RoutePackage) Open(ks KeySet) ([]byte, error) {
 	for _, kn := range ks.KNs {
-		cipher = kn.Key.UnmacdOpen(cipher, kn.Nonce)
+		kn.SealPackets(rp.Map)
+		ln := len(rp.Map) - PacketLength
+		nonce := crypto.NonceFromSlice(rp.Map[ln:])
+		rp.Map = rp.Map[:ln]
+
+		rp.Data = kn.Key.UnmacdOpen(rp.Data, nonce)
 	}
-	return ks.BaseKey.AnonOpen(cipher)
+	return ks.BaseKey.AnonOpen(rp.Data)
 }
 
 // RouteBuilder is used when constructing a route
@@ -270,19 +275,25 @@ func (n *PrivNode) Route(r *RoutePackage) error {
 	}
 
 	m = m[BoxIDLen:]
-	kn.OpenPackets(m)
-	copy(r.Map, m)
-	rand.Read(r.Map[len(m):])
 
 	r.Next = nd[1:]
 	if nd[0] == AddEncryption {
-		r.Data = kn.Key.UnmacdSeal(r.Data, kn.Nonce)
+		mgsNonce := crypto.RandomNonce()
+		r.Data = kn.Key.UnmacdSeal(r.Data, mgsNonce)
+		copy(r.Map, m)
+		ln := len(m)
+		copy(r.Map[ln:], mgsNonce.Slice())
+		rand.Read(r.Map[ln+crypto.NonceLength:])
+		kn.OpenPackets(r.Map)
 	} else {
 		if c, ok := n.Count[*kn.Nonce]; ok && c == 0 {
 			return ErrReplay{}
 		}
 		r.Data = kn.Key.UnmacdOpen(r.Data, kn.Nonce)
 		n.Count[*kn.Nonce] = 0
+		kn.OpenPackets(m)
+		copy(r.Map, m)
+		rand.Read(r.Map[len(m):])
 	}
 	return nil
 }
