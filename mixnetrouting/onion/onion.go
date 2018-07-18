@@ -101,6 +101,20 @@ type KN struct {
 	Nonce *crypto.Nonce
 }
 
+func (kn KN) SealPackets(packets []byte) {
+	for i := 0; i < len(packets); i += PacketLength {
+		packet := kn.Key.UnmacdSeal(packets[i:i+PacketLength], kn.Nonce)
+		copy(packets[i:i+PacketLength], packet)
+	}
+}
+
+func (kn KN) OpenPackets(packets []byte) {
+	for i := 0; i < len(packets); i += PacketLength {
+		packet := kn.Key.UnmacdOpen(packets[i:i+PacketLength], kn.Nonce)
+		copy(packets[i:i+PacketLength], packet)
+	}
+}
+
 // KeySet is used to store receiving route keys
 type KeySet struct {
 	KNs     []KN
@@ -174,8 +188,10 @@ func (rb *RouteBuilder) Push(n *PubNode) {
 	// R    : the rest of the route
 
 	kp := crypto.GenerateXchgPair()
-	shared := kp.Shared(n.Key)
-	nonce := crypto.RandomNonce()
+	kn := KN{
+		Key:   kp.Shared(n.Key),
+		Nonce: crypto.RandomNonce(),
+	}
 
 	// nd is next|dir
 	nd := make([]byte, IDLen+1)
@@ -186,14 +202,11 @@ func (rb *RouteBuilder) Push(n *PubNode) {
 	}
 	copy(nd[1:], rb.Next)
 
-	rb.Data = shared.UnmacdSeal(rb.Data, nonce)
-	rb.Data = append(shared.Seal(nd, nonce), rb.Data...)
+	kn.SealPackets(rb.Data)
+	rb.Data = append(kn.Key.Seal(nd, kn.Nonce), rb.Data...)
 	rb.Data = append(kp.Pub().Slice(), rb.Data...)
 	rb.Next = n.ID
-	rb.KNs = append(rb.KNs, KN{
-		Key:   shared,
-		Nonce: nonce,
-	})
+	rb.KNs = append(rb.KNs, kn)
 }
 
 // RouteMsg is what is passed between nodes
@@ -265,7 +278,11 @@ func (n *PrivNode) Route(r *RoutePackage) error {
 		n.Count[*nonce] = 0
 	}
 
-	m = shared.UnmacdOpen(m[BoxIDLen:], nonce)
+	m = m[BoxIDLen:]
+	KN{
+		Key:   shared,
+		Nonce: nonce,
+	}.OpenPackets(m)
 	copy(r.Map, m)
 	rand.Read(r.Map[len(m):])
 	return nil
