@@ -174,3 +174,49 @@ func setupAlicesRoute(rb *RouteBuilder, dht map[string]*PrivNode, ids []string, 
 	}
 	return rb
 }
+
+func TestReplay(t *testing.T) {
+	totalNodes := 50
+	hops := 3
+	msgLen := 30
+
+	dht, ids := setupDHT(totalNodes)
+
+	rb := NewSendRoute()
+	// Track the IDs just for testing
+	for i := 0; i < hops; i++ {
+		hopID := ids[mr.Intn(totalNodes)]
+		rb.Push(dht[hopID].Pub())
+	}
+
+	// Random message
+	msg := make([]byte, msgLen)
+	rand.Read(msg)
+	rp := rb.Send(msg)
+	for {
+		nnID := encode(rp.Next)
+		nn, ok := dht[nnID]
+		if !ok {
+			break
+		}
+		if !assert.NoError(t, nn.Route(rp)) {
+			return
+		}
+	}
+
+	assert.Equal(t, msg, rp.Data)
+
+	rand.Read(msg)
+	rp = rb.Send(msg)
+	nnID := encode(rp.Next)
+	nn, ok := dht[nnID]
+	if !ok {
+		t.Error("Did not find node")
+		return
+	}
+	err := nn.Route(rp)
+	assert.Error(t, err)
+	if _, ok := err.(ErrReplay); !ok {
+		t.Error("Should be ErrReplay: ", err.Error())
+	}
+}

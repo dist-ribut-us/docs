@@ -26,6 +26,7 @@ type PrivNode struct {
 	ID    []byte
 	Key   *crypto.XchgPair
 	Cache map[string]KeySet
+	Count map[crypto.Nonce]byte
 }
 
 var zeroID = encode(make([]byte, IDLen))
@@ -63,8 +64,9 @@ func NewPrivNode() *PrivNode {
 	dig := crypto.DigestFromSlice(key.Pub().Slice())
 	copy(id, dig.Slice())
 	return &PrivNode{
-		ID:  id,
-		Key: key,
+		ID:    id,
+		Key:   key,
+		Count: make(map[crypto.Nonce]byte),
 	}
 }
 
@@ -155,9 +157,12 @@ func (rb *RouteBuilder) Send(msg []byte) *RoutePackage {
 		msg = kn.Key.UnmacdSeal(msg, kn.Nonce)
 	}
 
+	cp := make([]byte, len(rb.Data))
+	copy(cp, rb.Data)
+
 	return &RoutePackage{
 		RouteMsg: &RouteMsg{
-			Map:  rb.Data,
+			Map:  cp,
 			Data: msg,
 		},
 		Next: rb.Next,
@@ -227,6 +232,12 @@ type RoutePackage struct {
 	KN   KN
 }
 
+type ErrReplay struct{}
+
+func (ErrReplay) Error() string {
+	return "Route has exhausted it's replay count"
+}
+
 // Route a package. The package will be mutated so that it contains the correct
 // Next ID and the RouteMsg to be sent.
 func (n *PrivNode) Route(r *RoutePackage) error {
@@ -248,7 +259,11 @@ func (n *PrivNode) Route(r *RoutePackage) error {
 	if nd[0] == AddEncryption {
 		r.Data = shared.UnmacdSeal(r.Data, nonce)
 	} else {
+		if c, ok := n.Count[*nonce]; ok && c == 0 {
+			return ErrReplay{}
+		}
 		r.Data = shared.UnmacdOpen(r.Data, nonce)
+		n.Count[*nonce] = 0
 	}
 
 	m = shared.UnmacdOpen(m[BoxIDLen:], nonce)
