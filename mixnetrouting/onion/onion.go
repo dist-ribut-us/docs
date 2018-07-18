@@ -17,6 +17,7 @@ const (
 	// AddEncryption indicates that during routing a layer of encryption shoud be
 	// added
 	AddEncryption byte = 1
+	PacketLength       = crypto.KeyLength + crypto.NonceLength + BoxIDLen
 )
 
 var encode = base64.URLEncoding.EncodeToString
@@ -127,7 +128,6 @@ type RouteBuilder struct {
 // NewSendRoute creates a RouteBuilder for direct sending
 func NewSendRoute() *RouteBuilder {
 	return &RouteBuilder{
-		Data:     make([]byte, BoxIDLen),
 		Next:     make([]byte, IDLen),
 		SendMode: true,
 	}
@@ -138,7 +138,6 @@ func (n *PrivNode) NewReceiveRoute() *RouteBuilder {
 	id := make([]byte, IDLen)
 	rand.Read(id)
 	rb := &RouteBuilder{
-		Data:     make([]byte, BoxIDLen),
 		ID:       encode(id),
 		SendMode: false,
 		Next:     id,
